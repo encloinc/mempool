@@ -65,7 +65,7 @@ class BitcoinRoutes {
       .get(config.MEMPOOL.API_URL_PREFIX + 'internal/blocks/:definitionHash', this.getBlocksByDefinitionHash)
       ;
 
-      if (config.MEMPOOL.BACKEND !== 'esplora') {
+      if (config.MEMPOOL.BACKEND === 'esplora') {
         app
           .get(config.MEMPOOL.API_URL_PREFIX + 'mempool', this.getMempool)
           .get(config.MEMPOOL.API_URL_PREFIX + 'mempool/txids', this.getMempoolTxIds)

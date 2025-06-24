@@ -904,6 +904,9 @@ class BitcoinRoutes {
       );
       res.json(transactions);
     } catch (e) {
+      console.log('getAddressTransactions error:');
+      console.log(e);
+
       if (
         e instanceof Error &&
         e.message &&

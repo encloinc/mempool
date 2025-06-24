@@ -1,14 +1,44 @@
-import { Component, OnInit, OnDestroy, ViewChildren, QueryList, ChangeDetectorRef } from '@angular/core';
+import {
+  Component,
+  OnInit,
+  OnDestroy,
+  ViewChildren,
+  QueryList,
+  ChangeDetectorRef,
+} from '@angular/core';
 import { Location } from '@angular/common';
 import { ActivatedRoute, ParamMap, Params, Router } from '@angular/router';
 import { ElectrsApiService } from '@app/services/electrs-api.service';
-import { switchMap, tap, throttleTime, catchError, map, shareReplay, startWith, filter, take } from 'rxjs/operators';
-import { Observable, of, Subscription, asyncScheduler, EMPTY, combineLatest, forkJoin } from 'rxjs';
+import {
+  switchMap,
+  tap,
+  throttleTime,
+  catchError,
+  map,
+  shareReplay,
+  startWith,
+  filter,
+  take,
+} from 'rxjs/operators';
+import {
+  Observable,
+  of,
+  Subscription,
+  asyncScheduler,
+  EMPTY,
+  combineLatest,
+  forkJoin,
+} from 'rxjs';
 import { StateService } from '@app/services/state.service';
 import { SeoService } from '@app/services/seo.service';
 import { WebsocketService } from '@app/services/websocket.service';
 import { RelativeUrlPipe } from '@app/shared/pipes/relative-url/relative-url.pipe';
-import { Acceleration, BlockAudit, BlockExtended, TransactionStripped } from '@interfaces/node-api.interface';
+import {
+  Acceleration,
+  BlockAudit,
+  BlockExtended,
+  TransactionStripped,
+} from '@interfaces/node-api.interface';
 import { ApiService } from '@app/services/api.service';
 import { BlockOverviewGraphComponent } from '@components/block-overview-graph/block-overview-graph.component';
 import { detectWebGL } from '@app/shared/graphs.utils';
@@ -23,14 +53,16 @@ import { identifyPrioritizedTransactions } from '@app/shared/transaction.utils';
   selector: 'app-block',
   templateUrl: './block.component.html',
   styleUrls: ['./block.component.scss'],
-  styles: [`
-    .loadingGraphs {
-      position: absolute;
-      top: 50%;
-      left: calc(50% - 15px);
-      z-index: 100;
-    }
-  `],
+  styles: [
+    `
+      .loadingGraphs {
+        position: absolute;
+        top: 50%;
+        left: calc(50% - 15px);
+        z-index: 100;
+      }
+    `,
+  ],
 })
 export class BlockComponent implements OnInit, OnDestroy {
   network = '';
@@ -58,7 +90,10 @@ export class BlockComponent implements OnInit, OnDestroy {
   overviewError: any = null;
   webGlEnabled = true;
   auditParamEnabled: boolean = false;
-  auditSupported: boolean = this.stateService.env.AUDIT && this.stateService.env.BASE_MODULE === 'mempool' && this.stateService.env.MINING_DASHBOARD === true;
+  auditSupported: boolean =
+    this.stateService.env.AUDIT &&
+    this.stateService.env.BASE_MODULE === 'mempool' &&
+    this.stateService.env.MINING_DASHBOARD === true;
   auditModeEnabled: boolean = !this.stateService.hideAudit.value;
   auditAvailable = true;
   showAudit: boolean;
@@ -86,8 +121,10 @@ export class BlockComponent implements OnInit, OnDestroy {
   priceSubscription: Subscription;
   blockConversion: Price;
 
-  @ViewChildren('blockGraphProjected') blockGraphProjected: QueryList<BlockOverviewGraphComponent>;
-  @ViewChildren('blockGraphActual') blockGraphActual: QueryList<BlockOverviewGraphComponent>;
+  @ViewChildren('blockGraphProjected')
+  blockGraphProjected: QueryList<BlockOverviewGraphComponent>;
+  @ViewChildren('blockGraphActual')
+  blockGraphActual: QueryList<BlockOverviewGraphComponent>;
 
   constructor(
     private route: ActivatedRoute,
@@ -103,7 +140,7 @@ export class BlockComponent implements OnInit, OnDestroy {
     private cacheService: CacheService,
     private servicesApiService: ServicesApiServices,
     private cd: ChangeDetectorRef,
-    private preloadService: PreloadService,
+    private preloadService: PreloadService
   ) {
     this.webGlEnabled = this.stateService.isBrowser && detectWebGL();
   }
@@ -119,44 +156,48 @@ export class BlockComponent implements OnInit, OnDestroy {
     this.setAuditAvailable(this.auditSupported);
 
     if (this.auditSupported) {
-      this.isAuditEnabledSubscription = this.isAuditEnabledFromParam().subscribe(auditParam => {
-        if (this.auditParamEnabled) {
-          this.auditModeEnabled = auditParam;
-        } else {
-          this.auditPrefSubscription = this.stateService.hideAudit.subscribe(hide => {
-            this.auditModeEnabled = !hide;
-            this.showAudit = this.auditAvailable && this.auditModeEnabled;
-          });
-        }
-      });
+      this.isAuditEnabledSubscription =
+        this.isAuditEnabledFromParam().subscribe((auditParam) => {
+          if (this.auditParamEnabled) {
+            this.auditModeEnabled = auditParam;
+          } else {
+            this.auditPrefSubscription = this.stateService.hideAudit.subscribe(
+              (hide) => {
+                this.auditModeEnabled = !hide;
+                this.showAudit = this.auditAvailable && this.auditModeEnabled;
+              }
+            );
+          }
+        });
     }
 
-    this.cacheBlocksSubscription = this.cacheService.loadedBlocks$.subscribe((block) => {
-      this.loadedCacheBlock(block);
-    });
+    this.cacheBlocksSubscription = this.cacheService.loadedBlocks$.subscribe(
+      (block) => {
+        this.loadedCacheBlock(block);
+      }
+    );
 
-    this.blocksSubscription = this.stateService.blocks$
-      .subscribe((blocks) => {
-        this.latestBlock = blocks[0];
-        this.latestBlocks = blocks;
-        this.setNextAndPreviousBlockLink();
+    this.blocksSubscription = this.stateService.blocks$.subscribe((blocks) => {
+      this.latestBlock = blocks[0];
+      this.latestBlocks = blocks;
+      this.setNextAndPreviousBlockLink();
 
-        for (const block of blocks) {
-          if (block.id === this.blockHash) {
-            this.block = block;
-            if (block.extras) {
-              block.extras.minFee = this.getMinBlockFee(block);
-              block.extras.maxFee = this.getMaxBlockFee(block);
-              if (block?.extras?.reward != undefined) {
-                this.fees = block.extras.reward / 100000000 - this.blockSubsidy;
-              }
+      for (const block of blocks) {
+        if (block.id === this.blockHash) {
+          this.block = block;
+          if (block.extras) {
+            block.extras.minFee = this.getMinBlockFee(block);
+            block.extras.maxFee = this.getMaxBlockFee(block);
+            if (block?.extras?.reward != undefined) {
+              this.fees = block.extras.reward / 100000000 - this.blockSubsidy;
             }
-          } else if (block.height === this.block?.height) {
-            this.block.stale = true;
-            this.block.canonical = block.id;
           }
+        } else if (block.height === this.block?.height) {
+          this.block.stale = true;
+          this.block.canonical = block.id;
         }
-      });
+      }
+    });
 
     this.block$ = this.route.paramMap.pipe(
       switchMap((params: ParamMap) => {
@@ -174,7 +215,9 @@ export class BlockComponent implements OnInit, OnDestroy {
         let isBlockHeight = false;
         if (/^[0-9]+$/.test(blockHash)) {
           isBlockHeight = true;
-          this.stateService.markBlock$.next({ blockHeight: parseInt(blockHash, 10)});
+          this.stateService.markBlock$.next({
+            blockHeight: parseInt(blockHash, 10),
+          });
         } else {
           this.blockHash = blockHash;
         }
@@ -193,16 +236,24 @@ export class BlockComponent implements OnInit, OnDestroy {
 
           let blockInCache: BlockExtended;
           if (isBlockHeight) {
-            blockInCache = this.latestBlocks.find((block) => block.height === parseInt(blockHash, 10));
+            blockInCache = this.latestBlocks.find(
+              (block) => block.height === parseInt(blockHash, 10)
+            );
             if (blockInCache) {
               return of(blockInCache);
             }
-            return this.electrsApiService.getBlockHashFromHeight$(parseInt(blockHash, 10))
+            return this.electrsApiService
+              .getBlockHashFromHeight$(parseInt(blockHash, 10))
               .pipe(
                 switchMap((hash) => {
                   this.blockHash = hash;
                   this.location.replaceState(
-                    this.router.createUrlTree([(this.network ? '/' + this.network : '') + '/block/', hash]).toString()
+                    this.router
+                      .createUrlTree([
+                        (this.network ? '/' + this.network : '') + '/block/',
+                        hash,
+                      ])
+                      .toString()
                   );
                   this.seoService.updateCanonical(this.location.path());
                   return this.apiService.getBlock$(hash).pipe(
@@ -216,16 +267,19 @@ export class BlockComponent implements OnInit, OnDestroy {
                   );
                 }),
                 catchError((err) => {
+                  console.error('Error fetching block hash from height:', err);
                   this.error = err;
                   this.isLoadingBlock = false;
                   this.isLoadingOverview = false;
                   this.seoService.logSoft404();
                   return EMPTY;
-                }),
+                })
               );
           }
 
-          blockInCache = this.latestBlocks.find((block) => block.id === this.blockHash);
+          blockInCache = this.latestBlocks.find(
+            (block) => block.id === this.blockHash
+          );
           if (blockInCache) {
             return of(blockInCache);
           }
@@ -259,11 +313,24 @@ export class BlockComponent implements OnInit, OnDestroy {
         this.nextBlockHeight = block.height + 1;
         this.setNextAndPreviousBlockLink();
 
-        this.seoService.setTitle($localize`:@@block.component.browser-title:Block ${block.height}:BLOCK_HEIGHT:: ${block.id}:BLOCK_ID:`);
-        if( this.stateService.network === 'liquid' || this.stateService.network === 'liquidtestnet' ) {
-          this.seoService.setDescription($localize`:@@meta.description.liquid.block:See size, weight, fee range, included transactions, and more for Liquid${seoDescriptionNetwork(this.stateService.network)} block ${block.height}:BLOCK_HEIGHT: (${block.id}:BLOCK_ID:).`);
+        this.seoService.setTitle(
+          $localize`:@@block.component.browser-title:Block ${block.height}:BLOCK_HEIGHT:: ${block.id}:BLOCK_ID:`
+        );
+        if (
+          this.stateService.network === 'liquid' ||
+          this.stateService.network === 'liquidtestnet'
+        ) {
+          this.seoService.setDescription(
+            $localize`:@@meta.description.liquid.block:See size, weight, fee range, included transactions, and more for Liquid${seoDescriptionNetwork(
+              this.stateService.network
+            )} block ${block.height}:BLOCK_HEIGHT: (${block.id}:BLOCK_ID:).`
+          );
         } else {
-          this.seoService.setDescription($localize`:@@meta.description.bitcoin.block:See size, weight, fee range, included transactions, audit (expected v actual), and more for Bitcoin${seoDescriptionNetwork(this.stateService.network)} block ${block.height}:BLOCK_HEIGHT: (${block.id}:BLOCK_ID:).`);
+          this.seoService.setDescription(
+            $localize`:@@meta.description.bitcoin.block:See size, weight, fee range, included transactions, audit (expected v actual), and more for Bitcoin${seoDescriptionNetwork(
+              this.stateService.network
+            )} block ${block.height}:BLOCK_HEIGHT: (${block.id}:BLOCK_ID:).`
+          );
         }
         this.isLoadingBlock = false;
         this.setBlockSubsidy();
@@ -285,130 +352,180 @@ export class BlockComponent implements OnInit, OnDestroy {
       shareReplay({ bufferSize: 1, refCount: true })
     );
 
-    this.overviewSubscription = this.block$.pipe(
-      switchMap((block) => {
-        return forkJoin([
-          this.apiService.getStrippedBlockTransactions$(block.id)
-            .pipe(
+    this.overviewSubscription = this.block$
+      .pipe(
+        switchMap((block) => {
+          return forkJoin([
+            this.apiService.getStrippedBlockTransactions$(block.id).pipe(
               catchError((err) => {
                 this.overviewError = err;
                 return of(null);
               })
             ),
-          !this.isAuditAvailableFromBlockHeight(block.height) ? of(null) : this.apiService.getBlockAudit$(block.id)
-            .pipe(
-              catchError((err) => {
-                this.overviewError = err;
-                return of(null);
-              })
-            )
-        ]);
-      })
-    )
-    .subscribe(([transactions, blockAudit]) => {
-      if (transactions) {
-        this.strippedTransactions = transactions;
-      } else {
-        this.strippedTransactions = [];
-      }
-      this.blockAudit = blockAudit;
-
-      this.setupBlockAudit();
-      this.isLoadingOverview = false;
-    });
-
-    this.accelerationsSubscription = this.block$.pipe(
-      switchMap((block) => {
-        return this.stateService.env.ACCELERATOR === true && block.height > 819500
-          ? this.servicesApiService.getAllAccelerationHistory$({ blockHeight: block.height })
-            .pipe(catchError(() => {
-              return of([]);
-            }))
-          : of([]);
-      })
-    ).subscribe((accelerations) => {
-      this.accelerations = accelerations;
-      if (accelerations.length && this.strippedTransactions) { // Don't call setupBlockAudit if we don't have transactions yet; it will be called later in overviewSubscription
-        this.setupBlockAudit();
-      }
-    });
-
-    this.oobSubscription = this.block$.pipe(
-      filter(() => this.stateService.env.PUBLIC_ACCELERATIONS === true && this.stateService.network === ''),
-      switchMap((block) => this.apiService.getAccelerationsByHeight$(block.height)
-        .pipe(
-          map(accelerations => {
-            return { block, accelerations };
-          }),
-          catchError(() => {
-            return of({ block, accelerations: [] });
-        }))
-      ),
-    ).subscribe(({ block, accelerations}) => {
-      let totalFees = 0;
-      for (const acc of accelerations) {
-        totalFees += acc.boost_cost;
-      }
-      this.oobFees = totalFees;
-      if (block && this.block && this.blockAudit && block?.height === this.block?.height) {
-        this.blockAudit.feeDelta = this.blockAudit.expectedFees > 0 ? (this.blockAudit.expectedFees - (this.block.extras.totalFees + this.oobFees)) / this.blockAudit.expectedFees : 0;
-      }
-    },
-    (error) => {
-      this.error = error;
-      this.isLoadingBlock = false;
-      this.isLoadingOverview = false;
-    });
-
-    this.networkChangedSubscription = this.stateService.networkChanged$
-      .subscribe((network) => this.network = network);
-
-    this.queryParamsSubscription = this.route.queryParams.subscribe((params) => {
-      this.currentQueryParams = params;
-      if (params.showDetails === 'true') {
-        this.showDetails = true;
-      } else {
-        this.showDetails = false;
-      }
-      if (params.view === 'projected') {
-        this.mode = 'projected';
-      } else {
-        this.mode = 'actual';
-      }
-      this.setupBlockGraphs();
-    });
-
-    this.keyNavigationSubscription = this.stateService.keyNavigation$.subscribe((event) => {
-      const prevKey = this.timeLtr ? 'ArrowLeft' : 'ArrowRight';
-      const nextKey = this.timeLtr ? 'ArrowRight' : 'ArrowLeft';
-      if (this.showPreviousBlocklink && event.key === prevKey && this.nextBlockHeight - 2 >= 0) {
-        this.navigateToPreviousBlock();
-      }
-      if (event.key === nextKey) {
-        if (this.showNextBlocklink) {
-          this.navigateToNextBlock();
+            !this.isAuditAvailableFromBlockHeight(block.height)
+              ? of(null)
+              : this.apiService.getBlockAudit$(block.id).pipe(
+                  catchError((err) => {
+                    this.overviewError = err;
+                    return of(null);
+                  })
+                ),
+          ]);
+        })
+      )
+      .subscribe(([transactions, blockAudit]) => {
+        if (transactions) {
+          this.strippedTransactions = transactions;
         } else {
-          this.router.navigate([this.relativeUrlPipe.transform('/mempool-block'), '0']);
+          this.strippedTransactions = [];
+        }
+        this.blockAudit = blockAudit;
+
+        this.setupBlockAudit();
+        this.isLoadingOverview = false;
+      });
+
+    this.accelerationsSubscription = this.block$
+      .pipe(
+        switchMap((block) => {
+          return this.stateService.env.ACCELERATOR === true &&
+            block.height > 819500
+            ? this.servicesApiService
+                .getAllAccelerationHistory$({ blockHeight: block.height })
+                .pipe(
+                  catchError(() => {
+                    return of([]);
+                  })
+                )
+            : of([]);
+        })
+      )
+      .subscribe((accelerations) => {
+        this.accelerations = accelerations;
+        if (accelerations.length && this.strippedTransactions) {
+          // Don't call setupBlockAudit if we don't have transactions yet; it will be called later in overviewSubscription
+          this.setupBlockAudit();
+        }
+      });
+
+    this.oobSubscription = this.block$
+      .pipe(
+        filter(
+          () =>
+            this.stateService.env.PUBLIC_ACCELERATIONS === true &&
+            this.stateService.network === ''
+        ),
+        switchMap((block) =>
+          this.apiService.getAccelerationsByHeight$(block.height).pipe(
+            map((accelerations) => {
+              return { block, accelerations };
+            }),
+            catchError(() => {
+              return of({ block, accelerations: [] });
+            })
+          )
+        )
+      )
+      .subscribe(
+        ({ block, accelerations }) => {
+          let totalFees = 0;
+          for (const acc of accelerations) {
+            totalFees += acc.boost_cost;
+          }
+          this.oobFees = totalFees;
+          if (
+            block &&
+            this.block &&
+            this.blockAudit &&
+            block?.height === this.block?.height
+          ) {
+            this.blockAudit.feeDelta =
+              this.blockAudit.expectedFees > 0
+                ? (this.blockAudit.expectedFees -
+                    (this.block.extras.totalFees + this.oobFees)) /
+                  this.blockAudit.expectedFees
+                : 0;
+          }
+        },
+        (error) => {
+          this.error = error;
+          this.isLoadingBlock = false;
+          this.isLoadingOverview = false;
+        }
+      );
+
+    this.networkChangedSubscription =
+      this.stateService.networkChanged$.subscribe(
+        (network) => (this.network = network)
+      );
+
+    this.queryParamsSubscription = this.route.queryParams.subscribe(
+      (params) => {
+        this.currentQueryParams = params;
+        if (params.showDetails === 'true') {
+          this.showDetails = true;
+        } else {
+          this.showDetails = false;
+        }
+        if (params.view === 'projected') {
+          this.mode = 'projected';
+        } else {
+          this.mode = 'actual';
+        }
+        this.setupBlockGraphs();
+      }
+    );
+
+    this.keyNavigationSubscription = this.stateService.keyNavigation$.subscribe(
+      (event) => {
+        const prevKey = this.timeLtr ? 'ArrowLeft' : 'ArrowRight';
+        const nextKey = this.timeLtr ? 'ArrowRight' : 'ArrowLeft';
+        if (
+          this.showPreviousBlocklink &&
+          event.key === prevKey &&
+          this.nextBlockHeight - 2 >= 0
+        ) {
+          this.navigateToPreviousBlock();
+        }
+        if (event.key === nextKey) {
+          if (this.showNextBlocklink) {
+            this.navigateToNextBlock();
+          } else {
+            this.router.navigate([
+              this.relativeUrlPipe.transform('/mempool-block'),
+              '0',
+            ]);
+          }
         }
       }
-    });
+    );
 
     if (this.priceSubscription) {
       this.priceSubscription.unsubscribe();
     }
-    this.priceSubscription = combineLatest([this.stateService.fiatCurrency$, this.block$]).pipe(
-      switchMap(([currency, block]) => {
-        return this.priceService.getBlockPrice$(block.timestamp, true, currency).pipe(
-          tap((price) => {
-            this.blockConversion = price;
-          })
-        );
-      })
-    ).subscribe();
+    this.priceSubscription = combineLatest([
+      this.stateService.fiatCurrency$,
+      this.block$,
+    ])
+      .pipe(
+        switchMap(([currency, block]) => {
+          return this.priceService
+            .getBlockPrice$(block.timestamp, true, currency)
+            .pipe(
+              tap((price) => {
+                this.blockConversion = price;
+              })
+            );
+        })
+      )
+      .subscribe();
   }
 
   ngAfterViewInit(): void {
-    this.childChangeSubscription = combineLatest([this.blockGraphProjected.changes.pipe(startWith(null)), this.blockGraphActual.changes.pipe(startWith(null))]).subscribe(() => {
+    this.childChangeSubscription = combineLatest([
+      this.blockGraphProjected.changes.pipe(startWith(null)),
+      this.blockGraphActual.changes.pipe(startWith(null)),
+    ]).subscribe(() => {
       this.setupBlockGraphs();
     });
   }
@@ -428,10 +545,10 @@ export class BlockComponent implements OnInit, OnDestroy {
     this.isAuditEnabledSubscription?.unsubscribe();
     this.oobSubscription?.unsubscribe();
     this.priceSubscription?.unsubscribe();
-    this.blockGraphProjected.forEach(graph => {
+    this.blockGraphProjected.forEach((graph) => {
       graph.destroy();
     });
-    this.blockGraphActual.forEach(graph => {
+    this.blockGraphActual.forEach((graph) => {
       graph.destroy();
     });
   }
@@ -449,7 +566,7 @@ export class BlockComponent implements OnInit, OnDestroy {
         relativeTo: this.route,
         queryParams: { showDetails: false, view: this.mode },
         queryParamsHandling: 'merge',
-        fragment: 'block'
+        fragment: 'block',
       });
     } else {
       this.showDetails = true;
@@ -457,46 +574,67 @@ export class BlockComponent implements OnInit, OnDestroy {
         relativeTo: this.route,
         queryParams: { showDetails: true, view: this.mode },
         queryParamsHandling: 'merge',
-        fragment: 'details'
+        fragment: 'details',
       });
     }
   }
 
   hasTaproot(version: number): boolean {
     const versionBit = 2; // Taproot
-    return (Number(version) & (1 << versionBit)) === (1 << versionBit);
+    return (Number(version) & (1 << versionBit)) === 1 << versionBit;
   }
 
   displayTaprootStatus(): boolean {
     if (this.stateService.network !== '') {
       return false;
     }
-    return this.block && this.block.height > 681393 && (new Date().getTime() / 1000) < 1628640000;
+    return (
+      this.block &&
+      this.block.height > 681393 &&
+      new Date().getTime() / 1000 < 1628640000
+    );
   }
 
-  navigateToPreviousBlock(): void  {
+  navigateToPreviousBlock(): void {
     if (!this.block) {
       return;
     }
-    const block = this.latestBlocks.find((b) => b.height === this.nextBlockHeight - 2);
-    this.router.navigate([this.relativeUrlPipe.transform('/block/'),
-      block ? block.id : this.block.previousblockhash], { state: { data: { block, blockHeight: this.nextBlockHeight - 2 } } });
+    const block = this.latestBlocks.find(
+      (b) => b.height === this.nextBlockHeight - 2
+    );
+    this.router.navigate(
+      [
+        this.relativeUrlPipe.transform('/block/'),
+        block ? block.id : this.block.previousblockhash,
+      ],
+      { state: { data: { block, blockHeight: this.nextBlockHeight - 2 } } }
+    );
   }
 
-  navigateToNextBlock(): void  {
-    const block = this.latestBlocks.find((b) => b.height === this.nextBlockHeight);
-    this.router.navigate([this.relativeUrlPipe.transform('/block/'),
-      block ? block.id : this.nextBlockHeight], { state: { data: { block, blockHeight: this.nextBlockHeight } } });
+  navigateToNextBlock(): void {
+    const block = this.latestBlocks.find(
+      (b) => b.height === this.nextBlockHeight
+    );
+    this.router.navigate(
+      [
+        this.relativeUrlPipe.transform('/block/'),
+        block ? block.id : this.nextBlockHeight,
+      ],
+      { state: { data: { block, blockHeight: this.nextBlockHeight } } }
+    );
   }
 
   setNextAndPreviousBlockLink(): void {
     if (this.latestBlock) {
-      if (!this.blockHeight){
+      if (!this.blockHeight) {
         this.showPreviousBlocklink = false;
       } else {
         this.showPreviousBlocklink = true;
       }
-      if (this.latestBlock.height && this.latestBlock.height === this.blockHeight) {
+      if (
+        this.latestBlock.height &&
+        this.latestBlock.height === this.blockHeight
+      ) {
         this.showNextBlocklink = false;
       } else {
         this.showNextBlocklink = true;
@@ -511,7 +649,7 @@ export class BlockComponent implements OnInit, OnDestroy {
 
     const acceleratedInBlock = {};
     for (const acc of accelerations) {
-      if (acc.pools?.some(pool => pool === this.block?.extras?.pool.id)) {
+      if (acc.pools?.some((pool) => pool === this.block?.extras?.pool.id)) {
         acceleratedInBlock[acc.txid] = acc;
       }
     }
@@ -521,7 +659,11 @@ export class BlockComponent implements OnInit, OnDestroy {
         tx.acc = true;
         const acceleration = acceleratedInBlock[tx.txid];
         const boostCost = acceleration.boostCost || acceleration.bidBoost;
-        const acceleratedFeeRate = Math.max(acceleration.effectiveFee, acceleration.effectiveFee + boostCost) / acceleration.effectiveVsize;
+        const acceleratedFeeRate =
+          Math.max(
+            acceleration.effectiveFee,
+            acceleration.effectiveFee + boostCost
+          ) / acceleration.effectiveVsize;
         if (acceleratedFeeRate > tx.rate) {
           tx.rate = acceleratedFeeRate;
         }
@@ -549,9 +691,11 @@ export class BlockComponent implements OnInit, OnDestroy {
 
       if (blockAudit?.template) {
         // augment with locally calculated *de*prioritized transactions if possible
-        const { prioritized, deprioritized } = identifyPrioritizedTransactions(transactions);
+        const { prioritized, deprioritized } =
+          identifyPrioritizedTransactions(transactions);
         // but if the local calculation produces returns unexpected results, don't use it
-        let useLocalDeprioritized = deprioritized.length < (transactions.length * 0.1);
+        let useLocalDeprioritized =
+          deprioritized.length < transactions.length * 0.1;
         for (const tx of prioritized) {
           if (!isPrioritized[tx] && !isAccelerated[tx]) {
             useLocalDeprioritized = false;
@@ -606,7 +750,7 @@ export class BlockComponent implements OnInit, OnDestroy {
             tx.status = 'found';
           } else {
             if (isFresh[tx.txid]) {
-              if (tx.rate - (tx.fee / tx.vsize) >= 0.1) {
+              if (tx.rate - tx.fee / tx.vsize >= 0.1) {
                 tx.status = 'freshcpfp';
               } else {
                 tx.status = 'fresh';
@@ -632,18 +776,27 @@ export class BlockComponent implements OnInit, OnDestroy {
           if (index === 0) {
             tx.status = null;
           } else if (isPrioritized[tx.txid]) {
-            if (isAdded[tx.txid] || (blockAudit.version > 0 && isUnseen[tx.txid])) {
+            if (
+              isAdded[tx.txid] ||
+              (blockAudit.version > 0 && isUnseen[tx.txid])
+            ) {
               tx.status = 'added_prioritized';
             } else {
               tx.status = 'prioritized';
             }
           } else if (isDeprioritized[tx.txid]) {
-            if (isAdded[tx.txid] || (blockAudit.version > 0 && isUnseen[tx.txid])) {
+            if (
+              isAdded[tx.txid] ||
+              (blockAudit.version > 0 && isUnseen[tx.txid])
+            ) {
               tx.status = 'added_deprioritized';
             } else {
               tx.status = 'deprioritized';
             }
-          } else if (isAdded[tx.txid] && (blockAudit.version === 0 || isUnseen[tx.txid])) {
+          } else if (
+            isAdded[tx.txid] &&
+            (blockAudit.version === 0 || isUnseen[tx.txid])
+          ) {
             tx.status = 'added';
           } else if (inTemplate[tx.txid]) {
             anySeen = true;
@@ -665,9 +818,22 @@ export class BlockComponent implements OnInit, OnDestroy {
           inBlock[tx.txid] = true;
         }
 
-        blockAudit.feeDelta = blockAudit.expectedFees > 0 ? (blockAudit.expectedFees - (this.block?.extras.totalFees + this.oobFees)) / blockAudit.expectedFees : 0;
-        blockAudit.weightDelta = blockAudit.expectedWeight > 0 ? (blockAudit.expectedWeight - this.block?.weight) / blockAudit.expectedWeight : 0;
-        blockAudit.txDelta = blockAudit.template.length > 0 ? (blockAudit.template.length - this.block?.tx_count) / blockAudit.template.length : 0;
+        blockAudit.feeDelta =
+          blockAudit.expectedFees > 0
+            ? (blockAudit.expectedFees -
+                (this.block?.extras.totalFees + this.oobFees)) /
+              blockAudit.expectedFees
+            : 0;
+        blockAudit.weightDelta =
+          blockAudit.expectedWeight > 0
+            ? (blockAudit.expectedWeight - this.block?.weight) /
+              blockAudit.expectedWeight
+            : 0;
+        blockAudit.txDelta =
+          blockAudit.template.length > 0
+            ? (blockAudit.template.length - this.block?.tx_count) /
+              blockAudit.template.length
+            : 0;
         this.blockAudit = blockAudit;
         this.setAuditAvailable(true);
       } else {
@@ -683,17 +849,21 @@ export class BlockComponent implements OnInit, OnDestroy {
 
   setupBlockGraphs(): void {
     if (this.blockAudit || this.strippedTransactions) {
-      this.blockGraphProjected.forEach(graph => {
+      this.blockGraphProjected.forEach((graph) => {
         graph.destroy();
         if (this.isMobile && this.mode === 'actual') {
-          graph.setup(this.blockAudit?.transactions || this.strippedTransactions ||  []);
+          graph.setup(
+            this.blockAudit?.transactions || this.strippedTransactions || []
+          );
         } else {
           graph.setup(this.blockAudit?.template || []);
         }
       });
-      this.blockGraphActual.forEach(graph => {
+      this.blockGraphActual.forEach((graph) => {
         graph.destroy();
-        graph.setup(this.blockAudit?.transactions || this.strippedTransactions || []);
+        graph.setup(
+          this.blockAudit?.transactions || this.strippedTransactions || []
+        );
       });
     }
   }
@@ -715,12 +885,14 @@ export class BlockComponent implements OnInit, OnDestroy {
       relativeTo: this.route,
       queryParams: { showDetails: this.showDetails, view: mode },
       queryParamsHandling: 'merge',
-      fragment: 'overview'
+      fragment: 'overview',
     });
   }
 
-  onTxClick(event: { tx: TransactionStripped, keyModifier: boolean }): void {
-    const url = new RelativeUrlPipe(this.stateService).transform(`/tx/${event.tx.txid}`);
+  onTxClick(event: { tx: TransactionStripped; keyModifier: boolean }): void {
+    const url = new RelativeUrlPipe(this.stateService).transform(
+      `/tx/${event.tx.txid}`
+    );
     if (!event.keyModifier) {
       this.router.navigate([url]);
     } else {
@@ -738,7 +910,8 @@ export class BlockComponent implements OnInit, OnDestroy {
 
   setAuditAvailable(available: boolean): void {
     this.auditAvailable = available;
-    this.showAudit = this.auditAvailable && this.auditModeEnabled && this.auditSupported;
+    this.showAudit =
+      this.auditAvailable && this.auditModeEnabled && this.auditSupported;
   }
 
   toggleAuditMode(): void {
@@ -756,10 +929,12 @@ export class BlockComponent implements OnInit, OnDestroy {
 
     // avoid duplicate subscriptions
     this.auditPrefSubscription?.unsubscribe();
-    this.auditPrefSubscription = this.stateService.hideAudit.subscribe((hide) => {
-      this.auditModeEnabled = !hide;
-      this.showAudit = this.auditAvailable && this.auditModeEnabled;
-    });
+    this.auditPrefSubscription = this.stateService.hideAudit.subscribe(
+      (hide) => {
+        this.auditModeEnabled = !hide;
+        this.showAudit = this.auditAvailable && this.auditModeEnabled;
+      }
+    );
   }
 
   updateAuditAvailableFromBlockHeight(blockHeight: number): void {
@@ -770,7 +945,7 @@ export class BlockComponent implements OnInit, OnDestroy {
 
   isAuditEnabledFromParam(): Observable<boolean> {
     return this.route.queryParams.pipe(
-      map(params => {
+      map((params) => {
         this.auditParamEnabled = 'audit' in params;
 
         return this.auditParamEnabled ? !(params['audit'] === 'false') : true;
@@ -784,17 +959,23 @@ export class BlockComponent implements OnInit, OnDestroy {
     }
     switch (this.stateService.network) {
       case 'testnet':
-        if (blockHeight < this.stateService.env.TESTNET_BLOCK_AUDIT_START_HEIGHT) {
+        if (
+          blockHeight < this.stateService.env.TESTNET_BLOCK_AUDIT_START_HEIGHT
+        ) {
           return false;
         }
         break;
       case 'signet':
-        if (blockHeight < this.stateService.env.SIGNET_BLOCK_AUDIT_START_HEIGHT) {
+        if (
+          blockHeight < this.stateService.env.SIGNET_BLOCK_AUDIT_START_HEIGHT
+        ) {
           return false;
         }
         break;
       default:
-        if (blockHeight < this.stateService.env.MAINNET_BLOCK_AUDIT_START_HEIGHT) {
+        if (
+          blockHeight < this.stateService.env.MAINNET_BLOCK_AUDIT_START_HEIGHT
+        ) {
           return false;
         }
     }
@@ -821,7 +1002,11 @@ export class BlockComponent implements OnInit, OnDestroy {
   }
 
   loadedCacheBlock(block: BlockExtended): void {
-    if (this.block && block.height === this.block.height && block.id !== this.block.id) {
+    if (
+      this.block &&
+      block.height === this.block.height &&
+      block.id !== this.block.id
+    ) {
       this.block.stale = true;
       this.block.canonical = block.id;
     }
@@ -829,7 +1014,7 @@ export class BlockComponent implements OnInit, OnDestroy {
 
   updateBlockReward(blockReward: number): void {
     if (this.fees === undefined) {
-       this.fees = blockReward;
+      this.fees = blockReward;
     }
   }
 }

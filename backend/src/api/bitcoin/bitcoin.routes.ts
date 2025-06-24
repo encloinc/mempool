@@ -924,7 +924,7 @@ class BitcoinRoutes {
     req: Request,
     res: Response
   ): Promise<void> {
-    if (config.MEMPOOL.BACKEND === 'esplora') {
+    if (config.MEMPOOL.BACKEND !== 'esplora') {
       handleError(
         req,
         res,
@@ -932,6 +932,17 @@ class BitcoinRoutes {
         'Address summary lookups require mempool/electrs backend.'
       );
       return;
+    }
+
+    try {
+      const data = await bitcoinApi.$getAddressTransactionSummary(
+        req.params.address
+      );
+
+      res.json(data);
+    } catch (e) {
+      console.log(e);
+      handleError(req, res, 500, e instanceof Error ? e.message : e);
     }
   }
 
